@@ -1,0 +1,47 @@
+<?xml version="0.0" ?>
+<robot name="trash">
+  <link name="baseLink">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+       <mass value="0.00000001"/>
+       <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+  </link>
+
+  <joint name="trash_fixed_joint" type="fixed">
+    <parent link="baseLink"/>
+    <child link="trash"/>
+    <origin rpy="0 0 0" xyz="-0.045 -0.01 0"/>
+  </joint>
+
+  <link name="trash">
+    <contact>
+      <!-- <rolling_friction value="0.03"/> -->
+      <!-- <spinning_friction value="0.03"/> -->
+      <!-- <lateral_friction value="1.5"/> -->
+      <!-- <stiffness value="300"/> -->
+      <!-- <damping value="50"/> -->
+    </contact>
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+       <mass value="0.2"/>
+       <!-- <inertia ixx="0.008852" ixy="0" ixz="0" iyy="0.008852" iyz="0" izz="0.01429"/> -->
+       <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="trash.obj" scale="0.01 0.01 0.01"/>
+      </geometry>
+    </visual>
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+         <mesh filename="trash_vhacd.obj" scale="0.01 0.01 0.01"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>
