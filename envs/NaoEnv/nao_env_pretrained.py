@@ -8,8 +8,11 @@ if CV2_ROS in sys.path:
 import time
 from envs import NaoEnv
 import pickle
+import pybullet
 
-OBS_DIM = 59
+mode = 0
+# mode = 1
+
 
 
 class NaoEnvPretrained(NaoEnv):
@@ -18,29 +21,34 @@ class NaoEnvPretrained(NaoEnv):
     """
     def __init__(self, gui=False):
         NaoEnv.__init__(self, gui)
-        infile = open("data/nao/walk_positions.pckl", 'rb')
+        infile = None
+        if mode:
+            # infile = open("data/nao/walk_positions_no_latency.pckl", 'rb')
+            # infile = open("data/nao/walk_positions_10HZ.pckl", 'rb')
+            infile = open("data/nao/walk_positions_300HZ.pckl", 'rb')
+        else:
+            # infile = open("data/nao/walk_positions.pckl", 'rb')
+            infile = open("data/nao/walk_positions_10HZ.pckl", 'rb')
+            # infile = open("data/nao/walk_positions_no_latency.pckl", 'rb')
+            
         self.positions = pickle.load(infile)
         self.positions_copy = list()
         infile.close()
         self.action_list = list()
-        self.last_time_action = time.time()
+        self.last_time_action = 0
+        self.outfile = None
+        # if not mode:
+        #     self.outfile = open("data/nao/walk_positions_300HZ.pckl", 'wb')
 
     def reset(self):
         """
         Resets the environment for a new episode
         """
-        self.episode_over = False
-        self.previous_x = 0
-        self.counter = 0
-        self.number_of_step_in_episode = 0
-        self.last_time_action = time.time()
-        self.foot_step_number = 0
-        self.feet_ahead = None
-        self._resetScene()
-
+        if self.outfile is not None and not mode and len(self.action_list) != 0:
+            pickle.dump(self.action_list, self.outfile)
+        obs = NaoEnv.reset(self)
         self.positions_copy = self.positions.copy()
-
-        obs, _ = self._getState()
+        self.last_time_action = 0
         return obs
 
     def _setVelocities(self, joints, n_velocities):
@@ -50,12 +58,58 @@ class NaoEnvPretrained(NaoEnv):
         if len(self.positions_copy) == 0:
             self.episode_over = True
             return
-        if time.time() - self.last_time_action >= 0.0015:
-            self.last_time_action = time.time()
+        if not mode:
             for joint, position in zip(
-                    self.controlled_joints, self.positions_copy[0]):
+                    joints, self.positions_copy[0]):
                 self.nao.setAngles(joint,
-                                   position, 1.0)
+                                position, 1.0)
+            self.positions_copy.pop(0)
+        else:
+            for joint, n_pos in zip(joints, self.positions_copy[0]):
+                upper = self.nao.joint_dict[joint].getUpperLimit()
+                lower = self.nao.joint_dict[joint].getLowerLimit()
+                pos = n_pos * (upper - lower) + lower
+                pybullet.setJointMotorControl2(
+                    self.nao.robot_model,
+                    self.nao.joint_dict[joint].getIndex(),
+                    pybullet.POSITION_CONTROL,
+                    targetPosition=pos,
+                    force=self.nao.joint_dict[joint].getMaxEffort(),
+                    physicsClientId=self.client)
+            self.positions_copy.pop(0)
+
+    def _setPositions(self, joints, n_velocities):
+        """
+        Sets velocities on the robot joints
+        """
+        if len(self.positions_copy) == 0:
+            self.episode_over = True
+            return
+        if not mode:
+            # if time.time() - self.last_time_action >= 1/10.0:
+            #     self.last_time_action = time.time()
+            for joint, position in zip(
+                    joints, self.positions_copy[0]):
+                pybullet.setJointMotorControl2(
+                    self.nao.robot_model,
+                    self.nao.joint_dict[joint].getIndex(),
+                    pybullet.POSITION_CONTROL,
+                    targetPosition=position,
+                    force=self.nao.joint_dict[joint].getMaxEffort(),
+                    physicsClientId=self.client)
+            self.positions_copy.pop(0)
+        else:
+            for joint, n_pos in zip(joints, self.positions_copy[0]):
+                upper = self.nao.joint_dict[joint].getUpperLimit()
+                lower = self.nao.joint_dict[joint].getLowerLimit()
+                pos = n_pos * (upper - lower) + lower
+                pybullet.setJointMotorControl2(
+                    self.nao.robot_model,
+                    self.nao.joint_dict[joint].getIndex(),
+                    pybullet.POSITION_CONTROL,
+                    targetPosition=pos,
+                    force=self.nao.joint_dict[joint].getMaxEffort(),
+                    physicsClientId=self.client)
             self.positions_copy.pop(0)
 
     def walking_expert_speed(self, _obs):
@@ -63,11 +117,9 @@ class NaoEnvPretrained(NaoEnv):
         Generates actions accordingly to the obs
         """
         actions = list()
-
         for name in self.controlled_joints:
-            actions.append(
-                self.nao.getAnglesVelocity(name) /
-                self.nao.joint_dict[name].getMaxVelocity())
+            _, vel, _ = self._getJointState(name)
+            actions.append(vel)
         self.action_list.append(actions)
         return actions
 
@@ -78,6 +130,15 @@ class NaoEnvPretrained(NaoEnv):
         actions = list()
 
         for name in self.controlled_joints:
+            upper = self.nao.joint_dict[name].getUpperLimit()
+            lower = self.nao.joint_dict[name].getLowerLimit()
             actions.append(
-                self.nao.getAnglesPosition(name))
+                (self.nao.getAnglesPosition(name) - lower)/
+                (upper - lower))
+        # if self.last_time_action == 0:
+        #     self.action_list.append(actions)
+        #     self.last_time_action = time.time()
+        # if time.time() - self.last_time_action >= 1/10.0:
+        #     self.last_time_action = time.time()
+        self.action_list.append(actions)
         return actions

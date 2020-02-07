@@ -11,8 +11,14 @@ import numpy as np
 from gym import spaces
 import pybullet
 from qibullet import SimulationManager
+import math
 
-OBS_DIM = 59
+OBS_DIM = 48
+DIST_MAX = 1.0
+DISCOUNT_FACTOR = 0.1
+H_STEPS = 10.0
+SPEED_TO_ATTAIN = 0.0079
+# SPEED_TO_ATTAIN = 0.05
 
 
 class NaoEnv(gym.Env):
@@ -111,19 +117,44 @@ class NaoEnv(gym.Env):
         self.gui = gui
         self.simulation_manager = SimulationManager()
         self.counter = 0
-        self.number_of_step_in_episode = 0
         self.foot_step_number = 0
         self.feet_ahead = None
+        self.plot_list = []
         self._setupScene()
+        fix_value = 2
+        obs_space_high = np.concatenate(
+                [np.array(len(self.controlled_joints) * [math.pi])] +\
+                [np.array(len(self.controlled_joints) * [fix_value])] +\
+                [np.array([fix_value, fix_value, fix_value, math.pi,
+                           fix_value])] +\
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
+                [np.array([200.0])] +\
+                [np.array([1.0, 1.0])]
+                )
+        obs_space_low = np.concatenate(
+                [np.array(len(self.controlled_joints) * [-math.pi])] +\
+                [np.array(len(self.controlled_joints) * [-fix_value])] +\
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi,
+                           -fix_value])] +\
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
+                [np.array([0.0])] +\
+                [np.array([0.0, 0.0])]
+                )
 
-        obs_space = np.inf * np.ones([OBS_DIM])
         self.observation_space = spaces.Box(
-            low=-obs_space,
-            high=obs_space)
+            low=obs_space_low,
+            high=obs_space_high)
 
         self.action_space = spaces.Box(
-            low=np.array([-1]*len(self.controlled_joints)),
+            low=np.array([0]*len(self.controlled_joints)),
             high=np.array([1]*len(self.controlled_joints)))
+        self.frequency = H_STEPS
 
     def step(self, action):
         """
@@ -161,10 +192,11 @@ class NaoEnv(gym.Env):
         except AssertionError:
             print("Incorrect action")
             return None, None, None, None
-        np.clip(action, [-1]*len(self.controlled_joints),
+        np.clip(action, [0]*len(self.controlled_joints),
                 [1]*len(self.controlled_joints))
-        self._setVelocities(self.controlled_joints, action)
-        self.number_of_step_in_episode += 1
+        self._setPositions(self.controlled_joints, action)
+        self.counter += 1
+        time.sleep(1.0 / self.frequency)
         obs, reward = self._getState()
         return obs, reward, self.episode_over, {}
 
@@ -174,13 +206,20 @@ class NaoEnv(gym.Env):
         """
         self.episode_over = False
         self.previous_x = 0
+        self.previous_vel = 0
+        self.previous_time = time.time()
         self.counter = 0
-        self.number_of_step_in_episode = 0
         self.foot_step_number = 0
+        self.time_init = time.time()
         self.feet_ahead = None
         self._resetScene()
 
         obs, _ = self._getState()
+        # if self.plot_list:
+        #     import matplotlib.pyplot as plt
+        #     plt.plot(self.plot_list)
+        #     plt.show()
+        # self.plot_list = []
         return obs
 
     def _hardResetJointState(self):
@@ -221,6 +260,23 @@ class NaoEnv(gym.Env):
                 force=self.nao.joint_dict[joint].getMaxEffort(),
                 physicsClientId=self.client)
 
+    def _setPositions(self, joints, n_positions):
+        """
+        Sets positions on the robot joints
+        """
+
+        for joint, n_position in zip(joints, n_positions):
+            upper = self.nao.joint_dict[joint].getUpperLimit()
+            lower = self.nao.joint_dict[joint].getLowerLimit()
+            position = n_position * (upper - lower) + lower
+            pybullet.setJointMotorControl2(
+                self.nao.robot_model,
+                self.nao.joint_dict[joint].getIndex(),
+                pybullet.POSITION_CONTROL,
+                targetPosition=position,
+                force=self.nao.joint_dict[joint].getMaxEffort(),
+                physicsClientId=self.client)
+
     def _getJointState(self, joint_name):
         """
         Returns the state of the joint in the world frame
@@ -230,8 +286,10 @@ class NaoEnv(gym.Env):
                 self.nao.robot_model,
                 self.nao.joint_dict[joint_name].getIndex(),
                 physicsClientId=self.client)
-
-        return position, velocity
+        delta_time = time.time() - self.previous_time
+        acceleration = (velocity - self.previous_vel) / delta_time
+        self.previous_vel = velocity
+        return position, velocity, acceleration
 
     def _getLinkState(self, link_name):
         """
@@ -260,6 +318,35 @@ class NaoEnv(gym.Env):
                 contact_list.append(0)
         return contact_list
 
+    def _getContactFootToFoot(self):
+        foot_list = ["r_ankle", "l_ankle"]
+        contact_list = []
+        points = pybullet.getContactPoints(
+            bodyA=self.nao.robot_model,
+            linkIndexA=self.nao.link_dict[foot_list[0]].getIndex(),
+            bodyB=self.nao.robot_model,
+            linkIndexB=self.nao.link_dict[foot_list[1]].getIndex(),
+            physicsClientId=self.client)
+        if len(points) > 0:
+            contact_list.append(1)
+        else:
+            contact_list.append(0)
+        return contact_list
+
+    def _getContactHands(self):
+        hand_list = ["r_wrist", "l_wrist"]
+        contact_list = []
+        for hand_joint in hand_list:
+            points = pybullet.getContactPoints(
+                bodyA=self.nao.robot_model,
+                linkIndexA=self.nao.link_dict[hand_joint].getIndex(),
+                physicsClientId=self.client)
+            if len(points) > 0:
+                contact_list.append(1)
+            else:
+                contact_list.append(0)
+        return contact_list
+
     def _getState(self, convergence_criteria=0.12, divergence_criteria=0.6):
         """
         Gets the observation and computes the current reward. Will also
@@ -268,14 +355,17 @@ class NaoEnv(gym.Env):
         cube is inferior to the one defined by the convergence criteria, the
         episode is stopped
         """
+
         # Get the information on the joints
         joint_position_list = []
         joint_velocity_list = []
+        joint_acceleration_list = []
 
         for joint in self.controlled_joints:
-            pos, vel = self._getJointState(joint)
+            pos, vel, acc = self._getJointState(joint)
             joint_position_list.append(pos)
             joint_velocity_list.append(vel)
+            joint_acceleration_list.append(acc)
 
         joint_position_list = np.array(
             joint_position_list,
@@ -287,6 +377,11 @@ class NaoEnv(gym.Env):
             dtype=np.float32
         )
 
+        joint_acceleration_list = np.array(
+            joint_acceleration_list,
+            dtype=np.float32
+        )
+
         feet_contact = np.array(
             self._getContactFeet(),
             dtype=np.float32
@@ -294,90 +389,101 @@ class NaoEnv(gym.Env):
 
         (x, y, z), (qx, qy, qz, qw), (vx, vy, vz), (vroll, vpitch, vyaw) =\
             self._getLinkState("torso")
-        roll, pitch, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
+        _, _, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
         torso_state = np.array(
-            [x, y, z, yaw, vx, vy, vz, vroll, vpitch, vyaw],
+            # [x, y, z, yaw, vx, vy, vz, vroll, vpitch, vyaw],
+            [x, y, z, yaw, vx],
             dtype=np.float32
         )
 
         (x, y, z), (qx, qy, qz, qw), (vx, vy, vz), (vroll, vpitch, vyaw) =\
-            self._getLinkState("r_ankle")
-        roll, pitch, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
-        r_ankle_state = np.array(
-            [x, y, z],
+            self._getLinkState("LHip")
+        _, _, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
+        l_hip_state = np.array(
+            [x, y, z, yaw],
             dtype=np.float32
         )
-
+        (x, y, z), (qx, qy, qz, qw), (vx, vy, vz), (vroll, vpitch, vyaw) =\
+            self._getLinkState("RHip")
+        _, _, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
+        r_hip_state = np.array(
+            [x, y, z, yaw],
+            dtype=np.float32
+        )
         (x, y, z), (qx, qy, qz, qw), (vx, vy, vz), (vroll, vpitch, vyaw) =\
             self._getLinkState("l_ankle")
-        roll, pitch, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
+        _, _, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
         l_ankle_state = np.array(
-            [x, y, z],
+            [x, y, z, yaw],
             dtype=np.float32
         )
-        feet_pos = None
-        if r_ankle_state[0] >= l_ankle_state[0] and\
-                feet_contact[0] == 0:
-            feet_pos = "Right"
-        if l_ankle_state[0] > r_ankle_state[0] and\
-                feet_contact[1] == 0:
-            feet_pos = "Left"
-        if self.feet_ahead is None:
-            self.feet_ahead = feet_pos
-        if self.feet_ahead is not None and feet_pos is not None and\
-                self.feet_ahead is not feet_pos:
-            self.foot_step_number += 1
-            self.feet_ahead = feet_pos
-        self.counter = self.number_of_step_in_episode / 1000
+        (x, y, z), (qx, qy, qz, qw), (vx, vy, vz), (vroll, vpitch, vyaw) =\
+            self._getLinkState("r_ankle")
+        _, _, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
+        r_ankle_state = np.array(
+            [x, y, z, yaw],
+            dtype=np.float32
+        )
+
         counter = np.array(
             [self.counter],
             dtype=np.float32
         )
-
         # Fill the observation
         obs = np.concatenate(
-            [counter] +
-            # [np.array([self.foot_step_number], dtype=np.float32)] +
             [joint_position_list] +
             [joint_velocity_list] +
             [torso_state] +
-            [r_ankle_state] +
+            [l_hip_state] +
+            [r_hip_state] +
             [l_ankle_state] +
+            [r_ankle_state] +
+            [counter] +
             [feet_contact])
-
+        # obs = np.concatenate(
+        #     [counter] +
+        #     [joint_position_list] +
+        #     [joint_velocity_list] +
+        #     [joint_acceleration_list] +
+        #     [torso_state] +
+        #     [feet_contact])
         reward = 0
         # To be passed to True when the episode is over
-        if torso_state[2] < 0.27 or torso_state[0] > 14:
-            if torso_state[2] < 0.27:
-                reward += -20
-            if torso_state[0] > 14:
-                reward += 10
-            if torso_state[0] <= 0.2:
-                reward += -10
-            else:
-                reward += np.clip(torso_state[0] - 10, -10, 5)
-            pos_feet_to_evaluate = 0
-            if l_ankle_state[0] >= r_ankle_state[0]:
-                pos_feet_to_evaluate = r_ankle_state[0]
-            else:
-                pos_feet_to_evaluate = l_ankle_state[0]
-            if pos_feet_to_evaluate <= 0.2:
-                reward += -10
-            else:
-                reward += np.clip(pos_feet_to_evaluate - 10, -10, 5)
-            # if self.foot_step_number < 2:
-            #     reward += -10
-            # else:
-            #     reward += np.clip(np.log(self.foot_step_number), -2, 2)
-            if self.counter < 0 or torso_state[0] <= 0.2:
-                reward += -10
-            else:
-                reward += np.clip(self.counter - 10, -10, 5)
+        feet_pose = abs(l_ankle_state[0]-r_ankle_state[0])/2 +\
+                np.min([l_ankle_state[0] , r_ankle_state[0]])
+        if torso_state[0] > DIST_MAX:
+            reward += 1
+            reward += (np.log((min([l_ankle_state[0],
+                                   r_ankle_state[0],
+                                   r_hip_state[0],
+                                   l_hip_state[0],
+                                   torso_state[0]
+                                   ]
+                                   ) + 1)) / 1.4)
+            reward -= time.time() - self.time_init
+            self.episode_over = True
+        if torso_state[2] < 0.27 or torso_state[0] < -1 or\
+                time.time() - self.time_init > 20:
+            reward += -1
+            reward += (np.log((min([feet_pose,
+                                   r_hip_state[0],
+                                   l_hip_state[0],
+                                   torso_state[0]
+                                   ]
+                                   ) + 1)) / 1.4)
             self.episode_over = True
         # Compute the reward
         # delta x : speed
-        reward += (torso_state[0] - self.previous_x)
-        self.previous_x = torso_state[0]
+        # reward += torso_state[0] - self.previous_x
+
+        # if (self.counter != 0):
+        #     self.plot_list.append(a - self.previous_x)
+        reward += np.exp(-10000*((feet_pose - self.previous_x) - 
+                            SPEED_TO_ATTAIN)**2) / 400.0
+        if 1 in self._getContactHands():
+            reward += -0.003
+        # self.previous_x = torso_state[0]
+        self.previous_x = feet_pose
         return obs, reward
 
     def _setupScene(self):
@@ -388,11 +494,11 @@ class NaoEnv(gym.Env):
         self.nao = self.simulation_manager.spawnNao(
             self.client,
             spawn_ground_plane=True)
-        self.nao.goToPosture("Stand", 0.8)
+        # self.nao.goToPosture("Stand", 0.8)
 
-        time.sleep(1.5)
+        # time.sleep(1.5)
 
-        self.starting_position = self.nao.getAnglesPosition(self.all_joints)
+        # self.starting_position = self.nao.getAnglesPosition(self.all_joints)
         self._resetJointState()
         time.sleep(1.0)
 
@@ -430,6 +536,6 @@ class NaoEnv(gym.Env):
         """
         self.simulation_manager.stopSimulation(self.client)
 
-    def close(self):
-        self._termination()
+    # def close(self):
+    #     self._termination()
     

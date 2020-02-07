@@ -3,8 +3,6 @@ import time
 import numpy as np
 import baselines_tools
 
-MODEL_NAME = "walk_pretrained"
-
 def main():
     parser = argparse.ArgumentParser()
 
@@ -35,22 +33,22 @@ def main():
     args = parser.parse_args()
 
     if args.generate_pretrain:
-        baselines_tools.collect_pretrained_dataset(MODEL_NAME)
+        baselines_tools.collect_pretrained_dataset(baselines_tools.MODEL_NAME)
 
     if args.train:
         seed = int(time.time())
         np.random.seed(seed)
         # train the model
-        baselines_tools.train(num_timesteps=int(20e7), seed=seed,
+        baselines_tools.train(num_timesteps=int(1e6), seed=seed,
             model_path=baselines_tools.PATH_MODEL)
 
     if args.pretrain:
-        baselines_tools.pretrained_model_and_save(MODEL_NAME)
+        baselines_tools.pretrained_model_and_save(baselines_tools.MODEL_NAME)
 
     if args.enjoy:
         baselines_tools.visualize(
             baselines_tools.PATH_MODEL +\
-                baselines_tools.AGENT + "_" + MODEL_NAME)
+                baselines_tools.AGENT + "_" + baselines_tools.MODEL_NAME)
     
 
 
