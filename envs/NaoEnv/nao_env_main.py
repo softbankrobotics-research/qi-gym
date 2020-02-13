@@ -3,6 +3,7 @@ import time
 import numpy as np
 import baselines_tools
 
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -40,16 +41,15 @@ def main():
         np.random.seed(seed)
         # train the model
         baselines_tools.train(num_timesteps=int(1e6), seed=seed,
-            model_path=baselines_tools.PATH_MODEL)
+                              model_path=baselines_tools.PATH_MODEL)
 
     if args.pretrain:
         baselines_tools.pretrained_model_and_save(baselines_tools.MODEL_NAME)
 
     if args.enjoy:
         baselines_tools.visualize(
-            baselines_tools.PATH_MODEL +\
-                baselines_tools.AGENT + "_" + baselines_tools.MODEL_NAME)
-    
+            baselines_tools.PATH_MODEL +
+            baselines_tools.AGENT + "_" + baselines_tools.MODEL_NAME)
 
 
 if __name__ == "__main__":

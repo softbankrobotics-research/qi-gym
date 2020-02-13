@@ -5,11 +5,10 @@ try:
 except Exception:
     pass
 
-from envs import NaoEnv
-from envs import NaoEnvPretrained
+from nao_env import NaoEnv
+from nao_env_pretrained import NaoEnvPretrained
 
 import numpy as np
-import time
 from datetime import datetime
 
 from stable_baselines.common.policies import MlpPolicy as MlpLstmPolicy
@@ -53,19 +52,15 @@ def init_model(gui=True, dataset=None):
             verbose=2,
             param_noise=None,
             action_noise=action_noise,
-            tensorboard_log=LOG_PATH+ AGENT + "Agent/" +
+            tensorboard_log=LOG_PATH + AGENT + "Agent/" +
             datetime.now().strftime(
                 "%Y%m%d-%H%M%S"))
     if AGENT is "GAIL":
         if dataset is None:
             return -1
         model = GAIL('MlpPolicy', env, dataset, verbose=2,
-                    #  entcoeff=0,
-                    #  gamma=0.995,
-                    #  lam=0.97,
                      tensorboard_log=LOG_PATH + AGENT + "Agent/" +
-                        datetime.now().strftime(
-                            "%Y%m%d-%H%M%S"))
+                     datetime.now().strftime("%Y%m%d-%H%M%S"))
     return env, model
 
 
@@ -101,6 +96,7 @@ def train(num_timesteps, seed, model_path=None):
     model.save(model_path + "/" + AGENT + "_" + MODEL_NAME)
     env.close()
 
+
 def collect_pretrained_dataset(dataset_name):
     env = globals()[ENV_ID_PRETRAINED](gui=True)
     generate_expert_traj(env.walking_expert_position,
@@ -121,6 +117,7 @@ def pretrained_model_and_save(dataset_name):
     model = pretrained_model(PATH_PRETRAINED + dataset_name, model)
     model.save(PATH_MODEL + AGENT + "_" + dataset_name)
     env.close()
+
 
 def visualize(name_model):
     model = getattr(globals()[AGENT], 'load')(name_model)

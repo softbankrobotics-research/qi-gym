@@ -6,13 +6,12 @@ if CV2_ROS in sys.path:
     sys.path.remove(CV2_ROS)
     sys.path.append(CV2_ROS)
 import time
-from envs import NaoEnv
+from nao_env import NaoEnv
 import pickle
 import pybullet
 
 mode = 0
 # mode = 1
-
 
 
 class NaoEnvPretrained(NaoEnv):
@@ -30,7 +29,7 @@ class NaoEnvPretrained(NaoEnv):
             # infile = open("data/nao/walk_positions.pckl", 'rb')
             infile = open("data/nao/walk_positions_10HZ.pckl", 'rb')
             # infile = open("data/nao/walk_positions_no_latency.pckl", 'rb')
-            
+
         self.positions = pickle.load(infile)
         self.positions_copy = list()
         infile.close()
@@ -44,7 +43,8 @@ class NaoEnvPretrained(NaoEnv):
         """
         Resets the environment for a new episode
         """
-        if self.outfile is not None and not mode and len(self.action_list) != 0:
+        if self.outfile is not None and not mode and\
+                len(self.action_list) != 0:
             pickle.dump(self.action_list, self.outfile)
         obs = NaoEnv.reset(self)
         self.positions_copy = self.positions.copy()
@@ -61,8 +61,7 @@ class NaoEnvPretrained(NaoEnv):
         if not mode:
             for joint, position in zip(
                     joints, self.positions_copy[0]):
-                self.nao.setAngles(joint,
-                                position, 1.0)
+                self.nao.setAngles(joint, position, 1.0)
             self.positions_copy.pop(0)
         else:
             for joint, n_pos in zip(joints, self.positions_copy[0]):
@@ -133,7 +132,7 @@ class NaoEnvPretrained(NaoEnv):
             upper = self.nao.joint_dict[name].getUpperLimit()
             lower = self.nao.joint_dict[name].getLowerLimit()
             actions.append(
-                (self.nao.getAnglesPosition(name) - lower)/
+                (self.nao.getAnglesPosition(name) - lower) /
                 (upper - lower))
         # if self.last_time_action == 0:
         #     self.action_list.append(actions)

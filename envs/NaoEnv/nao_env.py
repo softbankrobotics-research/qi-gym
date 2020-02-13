@@ -17,7 +17,7 @@ OBS_DIM = 48
 DIST_MAX = 1.0
 DISCOUNT_FACTOR = 0.1
 H_STEPS = 10.0
-SPEED_TO_ATTAIN = 0.0079
+SPEED_TO_ATTAIN = 0.007
 # SPEED_TO_ATTAIN = 0.05
 
 
@@ -123,27 +123,27 @@ class NaoEnv(gym.Env):
         self._setupScene()
         fix_value = 2
         obs_space_high = np.concatenate(
-                [np.array(len(self.controlled_joints) * [math.pi])] +\
-                [np.array(len(self.controlled_joints) * [fix_value])] +\
+                [np.array(len(self.controlled_joints) * [math.pi])] +
+                [np.array(len(self.controlled_joints) * [fix_value])] +
                 [np.array([fix_value, fix_value, fix_value, math.pi,
-                           fix_value])] +\
-                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
-                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
-                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
-                [np.array([fix_value, fix_value, fix_value, math.pi])] +\
-                [np.array([200.0])] +\
+                           math.pi, math.pi])] +
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +
+                [np.array([fix_value, fix_value, fix_value, math.pi])] +
+                [np.array([200.0])] +
                 [np.array([1.0, 1.0])]
                 )
         obs_space_low = np.concatenate(
-                [np.array(len(self.controlled_joints) * [-math.pi])] +\
-                [np.array(len(self.controlled_joints) * [-fix_value])] +\
+                [np.array(len(self.controlled_joints) * [-math.pi])] +
+                [np.array(len(self.controlled_joints) * [-fix_value])] +
                 [np.array([-fix_value, -fix_value, -fix_value, -math.pi,
-                           -fix_value])] +\
-                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
-                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
-                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
-                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +\
-                [np.array([0.0])] +\
+                           -math.pi, -math.pi])] +
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +
+                [np.array([-fix_value, -fix_value, -fix_value, -math.pi])] +
+                [np.array([0.0])] +
                 [np.array([0.0, 0.0])]
                 )
 
@@ -389,10 +389,10 @@ class NaoEnv(gym.Env):
 
         (x, y, z), (qx, qy, qz, qw), (vx, vy, vz), (vroll, vpitch, vyaw) =\
             self._getLinkState("torso")
-        _, _, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
+        roll, pitch, yaw = pybullet.getEulerFromQuaternion([qx, qy, qz, qw])
         torso_state = np.array(
             # [x, y, z, yaw, vx, vy, vz, vroll, vpitch, vyaw],
-            [x, y, z, yaw, vx],
+            [x, y, z, roll, pitch, yaw],
             dtype=np.float32
         )
 
@@ -449,27 +449,26 @@ class NaoEnv(gym.Env):
         #     [feet_contact])
         reward = 0
         # To be passed to True when the episode is over
-        feet_pose = abs(l_ankle_state[0]-r_ankle_state[0])/2 +\
-                np.min([l_ankle_state[0] , r_ankle_state[0]])
+        # feet_pose = abs(l_ankle_state[0]-r_ankle_state[0])/2 +\
+        #     np.min([l_ankle_state[0], r_ankle_state[0]])
         if torso_state[0] > DIST_MAX:
             reward += 1
             reward += (np.log((min([l_ankle_state[0],
                                    r_ankle_state[0],
                                    r_hip_state[0],
                                    l_hip_state[0],
-                                   torso_state[0]
-                                   ]
+                                   torso_state[0]]
                                    ) + 1)) / 1.4)
             reward -= time.time() - self.time_init
             self.episode_over = True
         if torso_state[2] < 0.27 or torso_state[0] < -1 or\
                 time.time() - self.time_init > 20:
             reward += -1
-            reward += (np.log((min([feet_pose,
+            reward += (np.log((min([l_ankle_state[0],
+                                   r_ankle_state[0],
                                    r_hip_state[0],
                                    l_hip_state[0],
-                                   torso_state[0]
-                                   ]
+                                   torso_state[0]]
                                    ) + 1)) / 1.4)
             self.episode_over = True
         # Compute the reward
@@ -478,12 +477,18 @@ class NaoEnv(gym.Env):
 
         # if (self.counter != 0):
         #     self.plot_list.append(a - self.previous_x)
-        reward += np.exp(-10000*((feet_pose - self.previous_x) - 
-                            SPEED_TO_ATTAIN)**2) / 400.0
+        reward += np.exp(-10000*((torso_state[0] - self.previous_x) -
+                         SPEED_TO_ATTAIN)**2) / 400.0
         if 1 in self._getContactHands():
-            reward += -0.003
+            reward += -0.1
+        # if abs(l_ankle_state[0]-r_ankle_state[0]) > 0.1:
+        #     reward += -0.1
+        max_rad = 0.3
+        if abs(torso_state[3]) > max_rad and abs(torso_state[4]) > max_rad and\
+                abs(torso_state[5]) > max_rad:
+            reward += -0.1
         # self.previous_x = torso_state[0]
-        self.previous_x = feet_pose
+        self.previous_x = torso_state[0]
         return obs, reward
 
     def _setupScene(self):
