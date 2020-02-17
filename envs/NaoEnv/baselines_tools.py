@@ -11,7 +11,7 @@ from nao_env_pretrained import NaoEnvPretrained
 import numpy as np
 from datetime import datetime
 
-from stable_baselines.common.policies import MlpPolicy as MlpLstmPolicy
+from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.ddpg.policies import MlpPolicy as DDPGMlpPolicy
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines import PPO2
@@ -25,7 +25,7 @@ ENV_ID = 'NaoEnv'
 ENV_ID_PRETRAINED = 'NaoEnvPretrained'
 PATH_MODEL = 'models/models_nao/'
 PATH_PRETRAINED = 'pretrain/pretrain_nao/'
-AGENT = "DDPG"
+AGENT = "GAIL"
 LOG_PATH = "logs/nao_env/"
 MODEL_NAME = "walk_pretrained"
 
@@ -35,9 +35,9 @@ def init_model(gui=True, dataset=None):
     env = DummyVecEnv([lambda: env])
     if AGENT is "PPO2":
         model = PPO2(
-                 MlpLstmPolicy,
+                 MlpPolicy,
                  env,
-                 verbose=2,
+                 verbose=0,
                  tensorboard_log=LOG_PATH + AGENT + "Agent/" +
                  datetime.now().strftime(
                      "%Y%m%d-%H%M%S"))
@@ -84,16 +84,37 @@ def train(num_timesteps, seed, model_path=None):
     # else:
     #     env, model = init_model()
     dataset = ExpertDataset(
-                    expert_path=PATH_PRETRAINED + MODEL_NAME + '.npz',
+                    expert_path=PATH_PRETRAINED + MODEL_NAME + "_saved" + '.npz',
                     traj_limitation=-1, verbose=1)
     env, model = init_model(dataset=dataset)
     model.pretrain(dataset, n_epochs=10000)
-    try:
-        model.learn(total_timesteps=num_timesteps)
-    except KeyboardInterrupt:
-        print("Program Interrupted")
-        pass
-    model.save(model_path + "/" + AGENT + "_" + MODEL_NAME)
+    i = 0
+    num_step = 5000
+    while i < num_timesteps:
+        try:
+            model.learn(total_timesteps=num_step, reset_num_timesteps=False)
+        except KeyboardInterrupt:
+            print("Program Interrupted")
+            pass
+        i += num_step
+        model.save(model_path + "/" + AGENT + "_" + MODEL_NAME + "_" + repr(i))
+        obs = env.reset()
+        cpt_ep_over = 0
+        cum_reward_list = []
+        cum_reward = 0
+        while cpt_ep_over < 5:
+            action, _states = model.predict(obs)
+            obs, rwd, ep_over, _ = env.step(action)
+            cum_reward += rwd
+            if ep_over:
+                cum_reward_list.append(cum_reward)
+                cum_reward = 0
+                cpt_ep_over += 1
+            env.render()
+        mean_rwd = np.mean(cum_reward_list)
+        print("*******************************")
+        print("rwd step " + repr(i) + " : " + repr(mean_rwd))
+
     env.close()
 
 
