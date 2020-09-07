@@ -109,44 +109,12 @@ def train(num_timesteps, seed, model_path=None):
                     traj_limitation=-1, verbose=1, batch_size=32,
                     randomize=False)
     env, model = init_model(dataset=dataset, gui=True)
-    # start = time.time()
-    # model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False)
-    # print("Time for " + repr(num_timesteps) + " step : " +
-    #       repr(time.time() - start))
-    # model.pretrain(dataset, n_epochs=1000)
     try:
         model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False)
     except KeyboardInterrupt:
         print("Program Interrupted")
         pass
     model.save(model_path + "/" + AGENT + "_" + MODEL_NAME)
-    # i = 0
-    # num_step = 5000
-    # while i < num_timesteps:
-    #     try:
-    #         model.learn(total_timesteps=num_step, reset_num_timesteps=False)
-    #     except KeyboardInterrupt:
-    #         print("Program Interrupted")
-    #         pass
-    #     i += num_step
-    #     model.save(model_path + "/" + AGENT + "_" + MODEL_NAME + "_" + repr(i))
-    #     obs = env.reset()
-    #     cpt_ep_over = 0
-    #     cum_reward_list = []
-    #     cum_reward = 0
-    #     while cpt_ep_over < 5:
-    #         action, _states = model.predict(obs)
-    #         obs, rwd, ep_over, _ = env.step(action)
-    #         cum_reward += rwd
-    #         if ep_over:
-    #             cum_reward_list.append(cum_reward)
-    #             cum_reward = 0
-    #             cpt_ep_over += 1
-    #         env.render()
-    #     mean_rwd = np.mean(cum_reward_list)
-    #     print("*******************************")
-    #     print("rwd step " + repr(i) + " : " + repr(mean_rwd))
-
     env.close()
 
 
