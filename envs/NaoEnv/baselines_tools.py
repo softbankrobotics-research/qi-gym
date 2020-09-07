@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime
 import time
 
+import tensorflow as tf
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.ddpg.policies import LnMlpPolicy as DDPGMlpPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv
@@ -30,24 +31,22 @@ ENV_ID = 'NaoEnv'
 ENV_ID_PRETRAINED = 'NaoEnvPretrained'
 PATH_MODEL = 'models/models_nao/'
 PATH_PRETRAINED = 'pretrain/pretrain_nao/'
-AGENT = "GAIL"
+AGENT = "PPO2"
 LOG_PATH = "logs/nao_env/"
 MODEL_NAME = "walk_pretrained"
 
 
-# Custom MLP policy of three layers of size 128 each
 class CustomDDPG(DDPGFeedForwardPolicy):
     def __init__(self, *args, **kwargs):
         super(CustomDDPG, self).__init__(*args, **kwargs,
-                                         layers=[128, 128, 128],
+                                         layers=[1024, 512],
                                          feature_extraction="mlp")
 
 
-# Custom MLP policy of three layers of size 128 each
 class CustomCOMMON(COMMONFeedForwardPolicy):
     def __init__(self, *args, **kwargs):
         super(CustomCOMMON, self).__init__(*args, **kwargs,
-                                           layers=[32, 32],
+                                           layers=[1024, 512, 512, 64],
                                            feature_extraction="mlp")
 
 
@@ -68,7 +67,7 @@ def make_env(rank, seed=0):
     return _init
 
 
-def init_model(gui=True, dataset=None, num_env=3):
+def init_model(gui=True, dataset=None, num_env=4):
     env = None
     if not gui and AGENT != "DDPG" and AGENT == "GAIL":
         env = SubprocVecEnv([make_env(i) for i in range(num_env)])
@@ -92,7 +91,9 @@ def init_model(gui=True, dataset=None, num_env=3):
             env,
             verbose=2,
             param_noise=None,
-            action_noise=action_noise)
+            action_noise=action_noise,
+            tensorboard_log=LOG_PATH + AGENT + "Agent/" +
+            datetime.now().strftime("%Y%m%d-%H%M%S"))
     if AGENT is "GAIL":
         if dataset is None:
             return -1
@@ -112,7 +113,7 @@ def train(num_timesteps, seed, model_path=None):
     # model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False)
     # print("Time for " + repr(num_timesteps) + " step : " +
     #       repr(time.time() - start))
-    model.pretrain(dataset, n_epochs=1000)
+    # model.pretrain(dataset, n_epochs=1000)
     try:
         model.learn(total_timesteps=num_timesteps, reset_num_timesteps=False)
     except KeyboardInterrupt:

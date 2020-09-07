@@ -40,7 +40,7 @@ def main():
         seed = int(time.time())
         np.random.seed(seed)
         # train the model
-        baselines_tools.train(num_timesteps=int(1e6), seed=seed,
+        baselines_tools.train(num_timesteps=int(1e7), seed=seed,
                               model_path=baselines_tools.PATH_MODEL)
 
     if args.pretrain:

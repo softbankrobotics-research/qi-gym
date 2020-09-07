@@ -17,74 +17,30 @@ class NaoEnvPretrained(NaoEnv):
     """
     def __init__(self, gui=False):
         NaoEnv.__init__(self, gui)
-        self.data = None
-        with open("data/nao/trajectories_walk.json") as json_file:
-            self.data = json.load(json_file)
-
-        self.positions = self.data["trajectories"].copy()
-        # self.positions_copy = self.positions[0].copy()
-        # self.positions.pop(0)
         self.action_list = list()
-        self.last_time_action = 0
 
-    def reset(self):
-        """
-        Resets the environment for a new episode
-        """
-        obs = NaoEnv.reset(self)
-        self.positions_copy = self.positions[0].copy()
-        self.actual_traj = self.positions[0].copy()
-        self.positions.pop(0)
-        self.last_time_action = 0
-        return obs
-
-    def _setVelocities(self, joints, n_velocities):
+    def _setPositions(self, virtual_robot_list, joints, n_positions_list):
         """
         Sets velocities on the robot joints
         """
-        if len(self.positions_copy) == 0:
-            self.episode_over = True
-            return
-        for joint, position in zip(
-                joints, self.positions_copy[0]):
-            self.nao.setAngles(joint, position, 1.0)
-        self.positions_copy.pop(0)
-
-    def _setPositions(self, joints, n_velocities):
-        """
-        Sets velocities on the robot joints
-        """
-        if len(self.positions_copy) == 0:
-            self.episode_over = True
-            return
-        for joint, position in zip(
-                self.controlled_joints, self.positions_copy[0]):
-            pybullet.setJointMotorControl2(
-                self.nao.robot_model,
-                self.nao.joint_dict[joint].getIndex(),
-                pybullet.POSITION_CONTROL,
-                targetPosition=position,
-                force=self.nao.joint_dict[joint].getMaxEffort(),
-                physicsClientId=self.client)
-        self.positions_copy.pop(0)
-
-    def walking_expert_speed(self, _obs):
-        """
-        Generates actions accordingly to the obs
-        """
-        actions = list()
-        for name in self.controlled_joints:
-            _, vel, _ = self._getJointState(name)
-            actions.append(vel)
-        self.action_list.append(actions)
-        return actions
+        index = self.index_joint_list.copy()
+        joint_force = self.joint_force_list.copy()
+        actions_list = [n_positions_list[1], n_positions_list[1]]
+        for virtual_robot, actions in zip(virtual_robot_list, actions_list):
+            pybullet.setJointMotorControlArray(
+                    virtual_robot.getRobotModel(),
+                    index,
+                    pybullet.POSITION_CONTROL,
+                    targetPositions=actions,
+                    forces=joint_force,
+                    physicsClientId=self.client)
 
     def walking_expert_position(self, _obs):
         """
         Generates actions accordingly to the obs
         """
         actions = list()
-        for name in self.controlled_joints_reduced:
+        for name in self.controlled_joints:
             upper = self.nao.joint_dict[name].getUpperLimit()
             lower = self.nao.joint_dict[name].getLowerLimit()
             position = self.nao.getAnglesPosition(name)
