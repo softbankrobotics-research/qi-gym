@@ -35,7 +35,8 @@ jobs:
       run: cd qibullet
       run: python setup.py develop --agree-license
     - name: Install qi-gym
-    - name: python setup.py develop
+      run: python setup.py develop
+    - name: Tests
       run: |
         cd tests
         python test_launcher.py
