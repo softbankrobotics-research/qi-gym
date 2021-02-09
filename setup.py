@@ -3,8 +3,6 @@ import setuptools
 
 with open("README.md", "r") as fh:
     readme = fh.read()
-    readme = readme[:readme.index("<!-- start -->")] +\
-        readme[(readme.index("<!-- end -->") + len("<!-- end -->")):]
 
 
 setuptools.setup(

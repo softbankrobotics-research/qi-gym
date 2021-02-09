@@ -29,21 +29,13 @@ jobs:
         pip install pybullet
         pip install codecov
         git clone https://github.com/softbankrobotics-research/qibullet.git
-    - name: Display Python version
-      run: python -c "import sys; print(sys.version)"
-    - name: Install qiBullet
-      run: |
         cd qibullet
         python setup.py develop --agree-license
+    - name: Display Python version
+      run: python -c "import sys; print(sys.version)"
     - name: Install qi-gym
       run: python setup.py develop
     - name: Tests
       run: |
         cd tests
         python test_launcher.py
-
-    # coverage run test_launcher.py
-    # - name: Coverage
-    #   run: |
-    #     cd tests
-    #     bash <(curl -s https://codecov.io/bash)
