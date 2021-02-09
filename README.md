@@ -1,2 +1,2 @@
-# qi_gym
-RL algorithms tested with qiBullet
+# qi-gym
+Reinforcment learning tools for SoftBank Robotics' robots
