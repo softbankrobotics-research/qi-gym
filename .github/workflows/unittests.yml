@@ -32,8 +32,9 @@ jobs:
     - name: Display Python version
       run: python -c "import sys; print(sys.version)"
     - name: Install qiBullet
-      run: cd qibullet
-      run: python setup.py develop --agree-license
+      run: |
+        cd qibullet
+        python setup.py develop --agree-license
     - name: Install qi-gym
       run: python setup.py develop
     - name: Tests
