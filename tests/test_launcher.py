@@ -17,13 +17,13 @@ if __name__ == "__main__":
 
     # Import the unittests
     try:
-        from dummy_test import DummyTest
+        from file_manager_test import FileManagerTest
 
     except ImportError as e:
         print(str(e))
         sys.exit(1)
 
-    test_classes = [DummyTest]
+    test_classes = [FileManagerTest]
 
     for test_class in test_classes:
         test_results.append(
