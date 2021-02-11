@@ -101,7 +101,7 @@ class FileManagerTest(unittest.TestCase):
         # Delete all experiments (recreate default ones before)
         default_names = list()
 
-        for i in range(specific_names):
+        for i in range(len(specific_names)):
             default_names.append(
                 FileManagerTest.file_manager.create_new_experiment())
 
